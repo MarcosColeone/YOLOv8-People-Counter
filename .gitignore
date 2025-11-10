@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Modelos (YOLOv8)
+*.pt
+
+# Dados
+Data/*.xlsx
+*.mp4
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db

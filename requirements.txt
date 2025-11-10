@@ -1,0 +1,16 @@
+# Bibliotecas essenciais para detecção e rastreamento (YOLOv8)
+ultralytics==8.2.14
+# PyTorch: Recomendamos instalar a versão de CPU separadamente para maior compatibilidade no Windows
+# torch
+# torchvision
+
+# OpenCV para manipulação de vídeo e exibição em tempo real
+opencv-python>=4.8.0.76
+
+# Bibliotecas para manipulação e exportação de dados
+pandas>=2.0.0
+openpyxl>=3.0.0
+numpy>=1.23.0
+
+# Dependência do ByteTrack (instalada automaticamente, mas bom incluir)
+lap>=0.5.12
