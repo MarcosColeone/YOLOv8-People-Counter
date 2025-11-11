@@ -3,27 +3,30 @@ import cv2
 import numpy as np
 import time
 import pandas as pd
-import math # Para arredondar confiança, se necessário (não usado na v8n, mas útil)
 import os
+import sys
 
 # ----------------------------------------------------------------------
-# 1. CLASSE PRINCIPAL DO CONTADOR DE PESSOAS (Mantida para modularidade)
+# 1. CLASSE PRINCIPAL DO CONTADOR DE PESSOAS 
 # ----------------------------------------------------------------------
 
 class PeopleCounter:
     """
     Contador de Pessoas modularizado usando YOLOv8 e ByteTrack.
-    Adaptado para rodar em IDEs locais (VS Code) com exibição em tempo real.
+    Suporta vídeo ou webcam e registra dados para exportação em Excel.
     """
-    def __init__(self, video_path, mask_path, output_path, model_path="yolov8n.pt", conf_threshold=0.5, resolution=(1280, 720)):
+    def __init__(self, source_path, mask_path, model_path="yolov8n.pt", 
+                 conf_threshold=0.5, resolution=(1280, 720), log_interval_seconds=5):
         # Configurações
-        self.VIDEO_PATH = video_path
+        self.SOURCE_PATH = source_path
         self.MASK_PATH = mask_path
-        self.OUTPUT_PATH = output_path # Será usado para salvar o Excel
         self.MODEL_PATH = model_path
         self.CONF_THRESHOLD = conf_threshold
         self.FRAME_WIDTH, self.FRAME_HEIGHT = resolution
-        self.LOG_INTERVAL_FRAMES = 30 
+        
+        # Log comercial por intervalo de tempo
+        self.LOG_INTERVAL_SECONDS = log_interval_seconds 
+        self.LAST_LOG_TIME = time.time()
         
         # Variáveis de Estado
         self.unique_ids = set() 
@@ -33,36 +36,33 @@ class PeopleCounter:
         self.frame_count = 0
         self.model = None
         self.mask = None
-        self.mask_resized = None # Máscara pré-redimensionada
+        self.mask_resized = None
 
     def load_resources(self):
-        """Carrega o modelo e a máscara."""
-        
-        # Carregar modelo YOLOv8
+        """Carrega o modelo YOLOv8 e a máscara de área de interesse."""
         print(f"[INFO] Carregando modelo: {self.MODEL_PATH}...")
         self.model = YOLO(self.MODEL_PATH)
         
-        # Preparar Máscara
         print("[INFO] Preparando máscara...")
         self.mask = cv2.imread(self.MASK_PATH, cv2.IMREAD_GRAYSCALE)
         if self.mask is None:
             raise Exception(f"❌ Erro: Máscara não encontrada no caminho: {self.MASK_PATH}")
 
-        # Redimensiona a máscara para a resolução de processamento final
+        # Prepara a máscara para a resolução de processamento
         self.mask_resized = cv2.resize(self.mask, (self.FRAME_WIDTH, self.FRAME_HEIGHT))
-        # Normaliza (Garante que preto é 0 e branco é 255)
         _, self.mask_resized = cv2.threshold(self.mask_resized, 127, 255, cv2.THRESH_BINARY)
         
     def process_frame(self, frame):
-        """Aplica máscara, realiza detecção/rastreamento e desenha resultados."""
+        """
+        Aplica máscara, realiza detecção/rastreamento e desenha resultados, 
+        incluindo o ID do rastreamento e a porcentagem de confiança.
+        """
         
-        # 1. Redimensionar Frame
+        # 1. Redimensionar e Aplicar Máscara
         frame = cv2.resize(frame, (self.FRAME_WIDTH, self.FRAME_HEIGHT))
-        
-        # 2. Aplicar Máscara ao Frame
         masked_frame = cv2.bitwise_and(frame, frame, mask=self.mask_resized)
         
-        # 3. Detecção + Rastreamento
+        # 2. Detecção + Rastreamento
         results = self.model.track(
             masked_frame,
             persist=True,
@@ -72,24 +72,29 @@ class PeopleCounter:
             verbose=False
         )
 
-        # 4. Atualizar Contadores
         self.active_ids.clear()
         
         if results and results[0].boxes.id is not None:
             boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
             track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-            
-            for box, track_id in zip(boxes, track_ids):
+            confidences = results[0].boxes.conf.cpu().numpy() # Extrai a confiança!
+
+            # 3. Iterar sobre os resultados
+            for box, track_id, conf in zip(boxes, track_ids, confidences): 
                 x1, y1, x2, y2 = box
                 self.active_ids.add(track_id)
                 self.unique_ids.add(track_id) 
+                
+                # Formata a confiança
+                confidence_percent = f"{int(conf * 100)}%" 
+                label = f"ID {track_id} ({confidence_percent})" # Texto final com ID e Confiança
 
-                # Desenhar caixas e IDs
+                # Desenhar caixas e IDs/Confiança
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"ID {track_id}", (x1, y1 - 10),
+                cv2.putText(frame, label, (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        # 5. Exibir Métricas
+        # 4. Exibir Métricas no Frame
         lotacao_atual = len(self.active_ids)
         total_pessoas = len(self.unique_ids)
 
@@ -98,26 +103,29 @@ class PeopleCounter:
         cv2.putText(frame, f"Total de pessoas: {total_pessoas}", (30, 100),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 200, 255), 3)
 
-        # 6. Desenhar máscara semi-transparente fora da área de detecção
+        # 5. Desenhar máscara semi-transparente
         overlay = frame.copy()
         overlay[self.mask_resized == 0] = (0, 0, 0)
         frame = cv2.addWeighted(frame, 0.7, overlay, 0.3, 0)
         
-        # 7. Log de Dados
-        self._log_data(lotacao_atual, total_pessoas)
+        # 6. Log de Dados (Amostragem por tempo)
+        self._log_data_by_time(lotacao_atual, total_pessoas)
+        self.frame_count += 1
 
         return frame
 
-    def _log_data(self, lotacao_atual, total_pessoas):
-        """Registra as métricas de contagem em um intervalo definido."""
-        if self.frame_count % self.LOG_INTERVAL_FRAMES == 0:
-            current_time = time.time() - self.start_time
+    def _log_data_by_time(self, lotacao_atual, total_pessoas):
+        """Registra as métricas por intervalo de TEMPO (comercial)."""
+        current_time = time.time()
+        
+        if (current_time - self.LAST_LOG_TIME) >= self.LOG_INTERVAL_SECONDS:
+            elapsed_time = current_time - self.start_time
             self.data_log.append({
-                "Tempo (s)": round(current_time, 2),
+                "Tempo (s)": round(elapsed_time, 2),
                 "Lotacao Atual": lotacao_atual,
                 "Total Pessoas Vistas (Acumulado)": total_pessoas
             })
-        self.frame_count += 1
+            self.LAST_LOG_TIME = current_time
 
     def export_data(self, excel_path):
         """Salva o log de dados em um arquivo Excel."""
@@ -127,75 +135,99 @@ class PeopleCounter:
             print(f"\n[INFO] 📊 Dados de contagem salvos em: {excel_path}")
 
 # ----------------------------------------------------------------------
-# 2. EXECUÇÃO PRINCIPAL (Para IDE Local)
+# 2. EXECUÇÃO PRINCIPAL (Suporte a Vídeo/Webcam)
 # ----------------------------------------------------------------------
 
-def run_local(counter: PeopleCounter):
-    """Loop principal para exibição em tempo real e salvamento de vídeo."""
+def run_local(counter: PeopleCounter, is_webcam: bool):
+    """Loop principal para exibição em tempo real e salvamento de dados."""
     
     counter.load_resources()
     
-    # Inicializa a captura de vídeo
-    cap = cv2.VideoCapture(counter.VIDEO_PATH)
-    if not cap.isOpened():
-        raise Exception("❌ Erro ao abrir o vídeo. Verifique o caminho e permissões.")
-        
-    print("[INFO] Processando vídeo (Pressione 'q' para fechar a janela)...")
+    # Se for Webcam, usa o ID 0. Se for Vídeo, usa o caminho do arquivo.
+    source = 0 if is_webcam else counter.SOURCE_PATH
+    cap = cv2.VideoCapture(source)
     
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    if not cap.isOpened():
+        raise Exception(f"❌ Erro ao abrir a fonte. Webcam pode estar em uso ou vídeo não encontrado.")
+        
+    print(f"[INFO] Processando {'Webcam' if is_webcam else 'Vídeo'} (Pressione 'q' para fechar a janela)...")
+    
+    # Otimização para modo webcam
+    if is_webcam:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, counter.FRAME_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, counter.FRAME_HEIGHT)
+    
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                # Se for vídeo, sai. Se for webcam, continua tentando ler
+                if not is_webcam:
+                    break
+                continue
+                
+            processed_frame = counter.process_frame(frame)
+            cv2.imshow("People Counter - YOLOv8", processed_frame)
             
-        processed_frame = counter.process_frame(frame)
-        
-        # Exibir o frame no OpenCV
-        cv2.imshow("People Counter - YOLOv8", processed_frame)
-        
-        # Sair do loop se a tecla 'q' for pressionada
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+                
+    except KeyboardInterrupt:
+        pass # Captura Ctrl+C
 
-    # Finalização
+    # Finalização e Exportação
     cap.release()
     cv2.destroyAllWindows()
     
     print("[INFO] ✅ Processamento finalizado.")
     
-    # Exportação de Dados
     excel_filename = f"registro_contagem_{time.strftime('%Y%m%d_%H%M%S')}.xlsx"
     excel_path_full = os.path.join("Data", excel_filename)
     
-    # Verifica se a pasta 'Data' existe antes de tentar salvar
+    # Garante que a pasta Data exista antes de salvar
     if not os.path.exists("Data"):
-        os.makedirs("Data") # Cria a pasta se ela não existir
+        os.makedirs("Data")
 
     counter.export_data(excel_path_full)
 
 
 if __name__ == '__main__':
-    # === CONFIGURAÇÕES DO PROJETO ===
+    # ===============================================
+    # === 🛑 CONFIGURAÇÕES DO PROJETO 🛑 ===
+    # ===============================================
     
-    # Use caminhos relativos ao seu projeto no VS Code!
-    # Crie as pastas 'Videos', 'Assets' etc.
-    VIDEO_FILE = "Videos/people.mp4" 
-    MASK_FILE = "Assets/mask-1.png"
-    # O output_path agora é apenas um placeholder, o nome do arquivo Excel será gerado com timestamp
-    OUTPUT_PLACEHOLDER = "Data/output_data.xlsx" 
+    # 1. ESCOLHA A FONTE DE VÍDEO:
+    # MUDAR APENAS ESTA LINHA: True para Webcam, False para Vídeo
+    USE_WEBCAM = True  # <--- Alterar aqui para True ou False 
+    
+    # 2. DEFINIÇÕES DE CAMINHO/MODELO:
+    VIDEO_FILE = "Videos/people.mp4"       # Caminho do seu arquivo de vídeo
+    MASK_FILE = "Assets/mask-1.png"        # Caminho da sua máscara
+    MODEL_TO_USE = "yolov8n.pt"            # Use 'yolov8l.pt' para maior precisão, ou 'yolov8n.pt' para maior velocidade
+    
+    # 3. CONTROLE COMERCIAL DO LOG:
+    # Registra uma entrada no Excel a cada X segundos.
+    LOG_INTERVAL_SECONDS = 5 
+    
+    # 4. THRESHOLD DE CONFIANÇA:
+    # Apenas detecções com confiança acima deste valor serão rastreadas.
+    CONF_THRESHOLD = 0.5 
 
-    # Crie as pastas necessárias se elas não existirem!
+    # === INICIALIZAÇÃO ===
+    
+    source_to_use = "Webcam (ID 0)" if USE_WEBCAM else VIDEO_FILE
     
     try:
         contador = PeopleCounter(
-            video_path=VIDEO_FILE, 
+            source_path=source_to_use, 
             mask_path=MASK_FILE, 
-            output_path=OUTPUT_PLACEHOLDER,
-            model_path="yolov8n.pt", 
-            conf_threshold=0.5,
-            resolution=(1280, 720) # Mantenha a mesma resolução para consistência visual
+            model_path=MODEL_TO_USE, 
+            conf_threshold=CONF_THRESHOLD,
+            resolution=(1280, 720),
+            log_interval_seconds=LOG_INTERVAL_SECONDS
         )
         
-        run_local(contador)
+        run_local(contador, is_webcam=USE_WEBCAM)
         
     except Exception as e:
         print(f"\nOcorreu um erro fatal: {e}")
