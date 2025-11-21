@@ -15,18 +15,6 @@ Persistência de Dados em Data/flow_log.db
 
 Exportação para Excel (flow_log.xlsx)
 
-📦 Estrutura do Projeto
-├── app.py
-├── requirements.txt
-├── yolov8n.pt
-├── Assets/
-│   └── mask-1.png
-├── Videos/
-│   └── people.mp4
-├── Data/
-│   ├── flow_log.db
-│   └── flow_log.xlsx
-└── instrucoes_pyinstaller.md
 
 ⚙️ Como Executar
 1. Criar Ambiente Virtual
