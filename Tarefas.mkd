@@ -1,0 +1,14 @@
+## ✅ Checklist
+
+| Tarefa | Detalhes | Prioridade |
+| :--- | :--- | :--- |
+| **1. Migrar para DB Local (SQLite)** | Substitua a exportação para Excel. Use o módulo `sqlite3` do Python ou o `pandas.to_sql` para salvar os dados em um arquivo `.db` (ex: `Data/registro_contagem.db`). | **Alta** |
+| **2. Refatorar Caminhos Relativos** | Garanta que todos os caminhos para arquivos (máscara, vídeo, DB) usem **caminhos relativos** e a biblioteca `os.path.join()`. Ex: `os.path.join("Assets", "mask-1.png")`. | **Alta** |
+| **3. Tratamento de Exceções Essenciais** | Implemente blocos `try...except` para: **Falha ao abrir vídeo** (`cv2.VideoCapture`) e **Falha ao carregar máscara** (`cv2.imread`). | **Média** |
+| **4. Opção de Configuração Externa** | Crie um arquivo simples (ex: `config.txt` ou `config.json`) onde o cliente possa alterar o nome do `VIDEO_FILE` ou o `CONF_THRESHOLD` sem editar o `app.py`. | **Média** |
+| **5. Instalar o PyInstaller** | `pip install pyinstaller` no seu ambiente virtual. | **Alta** |
+| **6. Geração do Executável** | Use o comando para empacotar o projeto, **incluindo as pastas de dados** para o executável encontrá-las. | **Alta** |
+| **7. Teste de Executável (Ambiente Limpo)** | Teste o `app.exe` em um computador que **não tenha Python instalado**. Isso garante que todas as dependências foram corretamente empacotadas. | **Alta** |
+| **8. Estrutura de Pastas Final** | Organize a entrega: `app.exe`, as pastas `Assets/`, `Videos/` e `Data/` devem estar no mesmo nível para garantir o funcionamento dos caminhos relativos. | **Alta** |
+| **9. Documentação de Uso Simples** | Crie um **manual claro** (`LEIA-ME.txt`) com: (1) Onde o cliente deve colocar os vídeos; (2) Instruções de um clique para rodar o `app.exe`; (3) Onde encontrar o relatório (`.db`). | **Alta** |
+| **10. Instruções de Suporte e Requisitos** | Adicione informações de contato e uma lista de **requisitos básicos de hardware** (ex: "Mínimo 8GB RAM, Processador i5 ou equivalente") para alinhar as expectativas de performance. | **Média** |

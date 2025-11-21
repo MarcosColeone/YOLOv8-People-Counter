@@ -1,30 +1,46 @@
-# 🚶 Contador Inteligente de Pessoas com YOLOv8 (People Counter)
+💻 PeopleFlow v1.0
 
-Projeto de Visão Computacional desenvolvido em Python para contagem e monitoramento de fluxo de pessoas em tempo real, utilizando o modelo YOLOv8 da Ultralytics e o rastreador ByteTrack.
+PeopleFlow é um sistema de Visão Computacional em Python para análise de fluxo e monitoramento de lotação em ambientes internos.
+Utiliza YOLOv8 + ByteTrack para detecção e rastreamento, com registro de dados em SQLite e exportação automática para Excel.
 
-## ✨ Funcionalidades Principais
+✨ Funcionalidades Principais
 
-* **Detecção e Rastreamento em Tempo Real:** Utiliza **YOLOv8n** (modelo nano) para detecção rápida e eficiente de pessoas (classe `0`).
-* **Rastreamento Robusto:** Emprega o **ByteTrack** para atribuir IDs únicos e estáveis a cada pessoa.
-* **Contagem de Lotação:** Calcula a **lotação atual** no frame e o **total de pessoas vistas** (acúmulo de IDs únicos).
-* **Área de Interesse (ROI):** Usa uma **máscara binária** para delimitar a área de contagem, ignorando regiões irrelevantes do vídeo.
-* **Exportação de Dados:** Gera um arquivo **Excel (.xlsx)** com logs de tempo, lotação e total acumulado, fundamental para relatórios e análises de BI (Business Intelligence).
+Detecção e Rastreamento com YOLOv8n + ByteTrack
 
-## 🚀 Como Executar o Projeto
+Contagem de Pessoas em Tempo Real
 
-### 1. Pré-requisitos
+ROI (Zona de Interesse) definida via máscara (Assets/mask-1.png)
 
-Certifique-se de ter o **Python 3.11** instalado.
+Persistência de Dados em Data/flow_log.db
 
-### 2. Configuração do Ambiente
+Exportação para Excel (flow_log.xlsx)
 
-Crie e ative um ambiente virtual para isolar as dependências do projeto:
+📦 Estrutura do Projeto
+├── app.py
+├── requirements.txt
+├── yolov8n.pt
+├── Assets/
+│   └── mask-1.png
+├── Videos/
+│   └── people.mp4
+├── Data/
+│   ├── flow_log.db
+│   └── flow_log.xlsx
+└── instrucoes_pyinstaller.md
 
-```bash
-# 1. Cria o ambiente virtual
+⚙️ Como Executar
+1. Criar Ambiente Virtual
 python -m venv .venv
-
-# 2. Ativa o ambiente virtual (Windows)
+# Windows
 .venv\Scripts\activate
-# OU (Linux/macOS)
+# Linux/macOS
 source .venv/bin/activate
+
+2. Instalar Dependências
+pip install -r requirements.txt
+
+3. Rodar a Aplicação
+python app.py
+
+
+Para usar webcam, altere USE_WEBCAM = True no app.py.
